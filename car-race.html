@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Car Race Game</title>
+<style>
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: #222;
+    font-family: Arial, sans-serif;
+    color: white;
+    user-select: none;
+  }
+  #gameArea {
+    position: relative;
+    margin: 0 auto;
+    background: gray;
+    width: 400px;
+    height: 600px;
+    overflow: hidden;
+    border: 5px solid #555;
+    box-shadow: 0 0 20px #0f0;
+  }
+  .road {
+    position: absolute;
+    width: 100%;
+    height: 200%;
+    background: repeating-linear-gradient(
+      to bottom,
+      #444 0,
+      #444 40px,
+      #666 40px,
+      #666 80px
+    );
+    animation: roadMove linear infinite;
+    top: 0;
+    left: 0;
+  }
+  @keyframes roadMove {
+    0% {
+      transform: translateY(0);
+    }
+    100% {
+      transform: translateY(-50%);
+    }
+  }
+  #playerCar {
+    position: absolute;
+    bottom: 30px;
+    left: 180px;
+    width: 40px;
+    height: 80px;
+    background: url('https://up.yimg.com/ib/th?id=OIP.A6x7GTTriQdrKNO4QFi4pgHaEK&pid=Api&rs=1&c=1&qlt=95&w=215&h=120') no-repeat center/contain;
+    transition: left 0.1s;
+    z-index: 10;
+  }
+  .obstacle {
+    position: absolute;
+    width: 40px;
+    height: 80px;
+    background: red;
+    border-radius: 8px;
+    top: -100px;
+    left: 0;
+  }
+  #scoreBoard {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    font-size: 18px;
+  }
+  #levelBoard {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    font-size: 18px;
+  }
+  #gameOver {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.9);
+    color: red;
+    font-size: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    z-index: 100;
+    display: none;
+  }
+  #gameOver button {
+    margin-top: 20px;
+    font-size: 20px;
+    padding: 10px 20px;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<div id="gameArea">
+  <div class="road"></div>
+  <div id="playerCar"></div>
+  <div id="scoreBoard">Score: 0</div>
+  <div id="levelBoard">Level: 1</div>
+  <div id="gameOver">
+    <div>Game Over!</div>
+    <button onclick="startGame()">Restart</button>
+  </div>
+</div>
+
+<script>
+  const gameArea = document.getElementById('gameArea');
+  const playerCar = document.getElementById('playerCar');
+  const scoreBoard = document.getElementById('scoreBoard');
+  const levelBoard = document.getElementById('levelBoard');
+  const gameOverScreen = document.getElementById('gameOver');
+  
+  const gameWidth = 400;
+  const gameHeight = 600;
+  const carWidth = 40;
+  const carHeight = 80;
+  
+  let playerX = 180;  // Starting left position
+  let playerY = gameHeight - carHeight - 30;
+  let speed = 5;      // speed of obstacles falling
+  let score = 0;
+  let level = 1;
+  let obstacles = [];
+  let gameRunning = false;
+  let moveLeft = false;
+  let moveRight = false;
+  
+  // Road speed control (adjust animation speed)
+  function setRoadSpeed(spd) {
+    const road = document.querySelector('.road');
+    road.style.animationDuration = `${1/spd}s`;
+  }
+
+  // Create obstacles
+  function createObstacle() {
+    const obstacle = document.createElement('div');
+    obstacle.classList.add('obstacle');
+    obstacle.style.top = '-100px';
+    // Random lane: 0 (40), 1 (140), 2 (240), 3 (340)
+    const lanes = [40, 140, 240, 340];
+    obstacle.style.left = lanes[Math.floor(Math.random() * lanes.length)] + 'px';
+    gameArea.appendChild(obstacle);
+    obstacles.push(obstacle);
+  }
+  
+  // Move obstacles
+  function moveObstacles() {
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+      const obs = obstacles[i];
+      let top = parseInt(obs.style.top);
+      top += speed;
+      obs.style.top = top + 'px';
+
+      if (top > gameHeight) {
+        // Remove obstacle out of screen and increase score
+        gameArea.removeChild(obs);
+        obstacles.splice(i, 1);
+        score++;
+        scoreBoard.textContent = `Score: ${score}`;
+
+        // Level up every 10 points
+        if (score % 10 === 0) {
+          level++;
+          speed += 1;
+          levelBoard.textContent = `Level: ${level}`;
+          setRoadSpeed(speed / 10);
+        }
+      }
+
+      // Collision check
+      if (collision(playerCar, obs)) {
+        endGame();
+      }
+    }
+  }
+  
+  // Collision detection
+  function collision(a, b) {
+    const aRect = a.getBoundingClientRect();
+    const bRect = b.getBoundingClientRect();
+
+    return !(
+      aRect.top > bRect.bottom ||
+      aRect.bottom < bRect.top ||
+      aRect.right < bRect.left ||
+      aRect.left > bRect.right
+    );
+  }
+
+  // Move player car
+  function movePlayer() {
+    if (moveLeft && playerX > 0) {
+      playerX -= 7;
+    }
+    if (moveRight && playerX < gameWidth - carWidth) {
+      playerX += 7;
+    }
+    playerCar.style.left = playerX + 'px';
+  }
+  
+  // Game loop
+  function gameLoop() {
+    if (!gameRunning) return;
+    movePlayer();
+    moveObstacles();
+    requestAnimationFrame(gameLoop);
+  }
+  
+  // Start game
+  function startGame() {
+    // Reset variables
+    playerX = 180;
+    playerCar.style.left = playerX + 'px';
+    obstacles.forEach(o => o.remove());
+    obstacles = [];
+    score = 0;
+    level = 1;
+    speed = 5;
+    scoreBoard.textContent = `Score: ${score}`;
+    levelBoard.textContent = `Level: ${level}`;
+    setRoadSpeed(speed / 10);
+    gameOverScreen.style.display = 'none';
+    gameRunning = true;
+    // Start creating obstacles regularly
+    if (window.createObstacleInterval) clearInterval(window.createObstacleInterval);
+    window.createObstacleInterval = setInterval(createObstacle, 1500 - level * 100 > 300 ? 1500 - level * 100 : 300);
+    gameLoop();
+  }
+
+  // End game
+  function endGame() {
+    gameRunning = false;
+    gameOverScreen.style.display = 'flex';
+    clearInterval(window.createObstacleInterval);
+  }
+
+  // Controls
+  window.addEventListener('keydown', e => {
+    if (e.key === 'ArrowLeft') moveLeft = true;
+    if (e.key === 'ArrowRight') moveRight = true;
+  });
+  window.addEventListener('keyup', e => {
+    if (e.key === 'ArrowLeft') moveLeft = false;
+    if (e.key === 'ArrowRight') moveRight = false;
+  });
+
+  startGame();
+</script>
+</body>
+</html>
